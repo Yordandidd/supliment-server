@@ -8,20 +8,21 @@ app.use(cors());
 app.use(bodyParser.json());
 
 /* ================= CONFIG ================= */
-const CLIENT_ID = "suppmate-alexa-client";
-const CLIENT_SECRET = "xg8356234nfds";
+const CLIENT_ID = "amzn1.application-oa2-client.c1953369790e40638f1ee22b5c16fd46";
+const CLIENT_SECRET = "amzn1.oa2-cs.v1.f6998559b27fcce8f58afd541f02dec2b6049bd22d4d904c6b09c702b60a2b1f";
 const REDIRECT_URI = "https://supliment-server.onrender.com/callback";
 
-/* simple storage (später DB) */
+/* TEMP STORAGE (später DB wie MongoDB) */
 let userTokens = {};
 
-/* ================= OAUTH LOGIN URL ================= */
+/* ================= LOGIN ================= */
 app.get("/login", (req, res) => {
   const url =
-    `https://www.amazon.com/ap/oa?client_id=${CLIENT_ID}` +
-    `&scope=alexa::alerts:reminders:skill:readwrite` +
-    `&response_type=code` +
-    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    "https://www.amazon.com/ap/oa" +
+    "?client_id=" + CLIENT_ID +
+    "&scope=alexa::alerts:reminders:skill:readwrite" +
+    "&response_type=code" +
+    "&redirect_uri=" + encodeURIComponent(REDIRECT_URI);
 
   res.redirect(url);
 });
@@ -29,6 +30,8 @@ app.get("/login", (req, res) => {
 /* ================= CALLBACK ================= */
 app.get("/callback", async (req, res) => {
   const code = req.query.code;
+
+  if (!code) return res.send("No code received");
 
   try {
     const response = await axios.post(
@@ -42,16 +45,15 @@ app.get("/callback", async (req, res) => {
       })
     );
 
-    const data = response.data;
-
     userTokens["default"] = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
     };
 
-    res.send("Alexa verbunden ✅ Du kannst jetzt zurück in die App");
-  } catch (e) {
-    res.send("Fehler bei Login ❌");
+    res.send("✅ Alexa erfolgreich verbunden! Du kannst zurück in die App.");
+  } catch (err) {
+    console.log(err.response?.data || err.message);
+    res.send("❌ Login Fehler");
   }
 });
 
@@ -62,15 +64,23 @@ app.post("/createReminder", async (req, res) => {
   const token = userTokens["default"]?.access_token;
 
   if (!token) {
-    return res.status(401).send("Alexa nicht verbunden");
+    return res.status(401).json({ error: "Alexa nicht verbunden" });
   }
 
   try {
+    // time = "12:30"
+    const [h, m] = time.split(":");
+
+    const now = new Date();
+    now.setHours(Number(h));
+    now.setMinutes(Number(m));
+    now.setSeconds(0);
+
     const reminder = {
       requestTime: new Date().toISOString(),
       trigger: {
         type: "SCHEDULED_ABSOLUTE",
-        scheduledTime: `2026-04-24T${time}:00.000`,
+        scheduledTime: now.toISOString(),
         timeZoneId: "Europe/Berlin",
       },
       alertInfo: {
@@ -100,9 +110,16 @@ app.post("/createReminder", async (req, res) => {
     );
 
     res.json({ success: true, data: response.data });
-  } catch (e) {
-    res.status(500).json({ error: e.toString() });
+
+  } catch (err) {
+    console.log(err.response?.data || err.message);
+    res.status(500).json({ error: "Reminder failed" });
   }
 });
 
-app.listen(3000, () => console.log("Server läuft"));
+/* ================= SERVER ================= */
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+  console.log("🚀 Server läuft auf Port " + PORT);
+});
