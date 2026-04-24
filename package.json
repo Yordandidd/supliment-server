@@ -1,2 +1,11 @@
-npm init -y
-npm install express
+{
+  "name": "supplement-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
